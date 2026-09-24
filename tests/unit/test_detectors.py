@@ -17,4 +17,4 @@ def test_safe_corpus_has_no_findings() -> None:
 def test_detector_catalog_is_explicit() -> None:
     assert "REENTRANCY-CEI-001" in rule_ids()
     assert "UNCHECKED-CALL-001" in rule_ids()
-    assert "ACCESS-CONTROL-001" in rule_ids()
+    assert "TX-ORIGIN-001" in rule_ids()
