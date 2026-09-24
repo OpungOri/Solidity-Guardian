@@ -6,15 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from .diagnostics import Diagnostics
-from .models import AuditConfig
+from .models import AuditConfig, Finding
 
 
 class Orchestrator:
-    """Coordinates the audit workflow and keeps the default mode audit/report-only."""
+    """Coordinates compilation, source mapping, and deterministic detectors."""
 
     def __init__(self, config: AuditConfig, diagnostics: Diagnostics | None = None) -> None:
         self.config = config
         self.diagnostics = diagnostics or Diagnostics(config.correlation_id)
+        self.findings: list[Finding] = []
 
     def run(self) -> list[dict[str, Any]]:
         if self.config.file is None and self.config.directory is None:
@@ -25,6 +26,7 @@ class Orchestrator:
             raise FileNotFoundError("No Solidity files were found")
 
         from .compiler import Compiler
+        from .detectors import detect_reentrancy
         from .source_mapper import SourceMapper
 
         compiler = Compiler(self.diagnostics, Path(self.config.workspace_root).resolve())
@@ -34,7 +36,14 @@ class Orchestrator:
 
         mapper = SourceMapper({path.name: path for path in source_files})
         mapping = mapper.build(ast)
-
+        self.findings = detect_reentrancy(source_files)
+        self.diagnostics.add(
+            "info",
+            "detector",
+            "Detectors completed",
+            findings=len(self.findings),
+            rules=["REENTRANCY-CEI-001"],
+        )
         self.diagnostics.add(
             "info",
             "orchestrator",
@@ -43,6 +52,7 @@ class Orchestrator:
             compiler_version=version,
             is_poc=self.config.generate_poc,
             mapping_keys=list(mapping),
+            findings=len(self.findings),
         )
 
         return [
@@ -50,6 +60,7 @@ class Orchestrator:
                 "file": str(path),
                 "compiler_version": version,
                 "mapped": path.name in mapping,
+                "findings": sum(1 for finding in self.findings if str(path) in finding.sources),
             }
             for path in source_files
         ]

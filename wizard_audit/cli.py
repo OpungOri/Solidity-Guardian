@@ -21,11 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-d", "--dir", help="Directory containing Solidity sources")
     parser.add_argument("-o", "--output", default="./audit-output", help="Output directory")
     parser.add_argument("--deep", action="store_true", help="Enable deeper audit heuristics")
-    parser.add_argument(
-        "--generate-poc",
-        action="store_true",
-        help="Explicitly enable PoC generation; default is audit-only",
-    )
+    parser.add_argument("--generate-poc", action="store_true", help="Explicitly enable PoC generation; default is audit-only")
     parser.add_argument("--solc-version", help="Preferred solc version, e.g. 0.8.20")
     parser.add_argument("--rpc", help="RPC URL used for on-chain evidence gathering")
     parser.add_argument("--rpc-fork", help="Fork RPC URL")
@@ -44,7 +40,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     correlation_id = os.environ.get("WIZARD_CORRELATION_ID") or None
     diagnostics = Diagnostics(correlation_id)
-
     try:
         file_path = validate_file_path(args.file) if args.file else None
         directory_path = validate_file_path(args.dir) if args.dir else None
@@ -52,7 +47,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         validate_url(args.rpc)
         validate_url(args.rpc_fork)
         validate_address(args.address)
-
         config = AuditConfig(
             file=str(file_path) if file_path else None,
             directory=str(directory_path) if directory_path else None,
@@ -69,25 +63,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             correlation_id=correlation_id,
             workspace_root=".",
         )
-
-        if args.generate_poc:
-            diagnostics.add(
-                "info",
-                "cli",
-                "PoC generation explicitly requested; audit-only default remains in effect unless this flag is set",
-            )
-
         orchestrator = Orchestrator(config, diagnostics)
         results = orchestrator.run()
-
-        # Keep report artifacts as a first-class output of every successful audit.
-        # The current orchestrator has no detector findings yet, so an empty finding
-        # list is intentional and still provides stable report/summary/diagnostics files.
         exporter = Exporter(config, diagnostics)
-        exporter.write_report([])
-        exporter.write_summary([])
+        exporter.write_report(orchestrator.findings)
+        exporter.write_summary(orchestrator.findings)
         exporter.write_diagnostics()
-
         print(json.dumps({"status": "ok", "results": results}, indent=2, sort_keys=True))
         return 0
     except (FileNotFoundError, PermissionError, ValueError, RuntimeError) as exc:
