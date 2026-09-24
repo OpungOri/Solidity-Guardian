@@ -34,9 +34,10 @@ class SourceMapper:
             if not isinstance(src, str) or not src:
                 continue
 
-            start, length, source_index = self._parse_src(src)
-            if start is None:
+            parsed = self._parse_src(src)
+            if parsed is None:
                 continue
+            start, length, source_index = parsed
 
             file_key = self._resolve_source_file(start, source_index, source_names, mapping)
             if file_key is None:
@@ -66,20 +67,20 @@ class SourceMapper:
                 yield from SourceMapper._iter_nodes(item)
 
     @staticmethod
-    def _parse_src(src: str) -> tuple[int | None, int | None, int | None]:
+    def _parse_src(src: str) -> tuple[int, int, int] | None:
         parts = src.split(":")
         if len(parts) != 3:
-            return None, None, None
+            return None
 
         try:
             start = int(parts[0])
             length = int(parts[1])
             source_index = int(parts[2])
         except ValueError:
-            return None, None, None
+            return None
 
         if start < 0 or length < 0 or source_index < 0:
-            return None, None, None
+            return None
 
         return start, length, source_index
 
@@ -119,9 +120,10 @@ class SourceMapper:
         return None
 
     def line_number_for(self, src: str, source_path: str) -> int:
-        start, _, _ = self._parse_src(src)
-        if start is None:
+        parsed = self._parse_src(src)
+        if parsed is None:
             return 1
+        start, _, _ = parsed
         meta = self.source_files.get(source_path)
         if meta is None:
             return 1
