@@ -41,7 +41,6 @@ class OnChainSourceFetcher:
         self.timeout = timeout
 
     def fetch(self, address: str, destination: Path, chain_id: str | None = None) -> OnChainSource:
-        destination.mkdir(parents=True, exist_ok=True)
         bytecode = self._rpc("eth_getCode", [address, "latest"])
         if not isinstance(bytecode, str) or bytecode in {"0x", "0x0"}:
             raise SourceFetchError(f"No deployed bytecode found at {address}")
@@ -60,6 +59,7 @@ class OnChainSourceFetcher:
             raise SourceFetchError("Contract source is not verified on the configured explorer; bytecode-only auditing is refused")
 
         files = self._unpack_source(source, record.get("ContractName") or "Contract")
+        destination.mkdir(parents=True, exist_ok=True)
         for name, content in files.items():
             path = destination / self._safe_name(name)
             path.parent.mkdir(parents=True, exist_ok=True)
