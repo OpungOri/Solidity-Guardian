@@ -9,6 +9,7 @@ import os
 from typing import Sequence
 
 from .diagnostics import Diagnostics
+from .exporter import Exporter
 from .models import AuditConfig
 from .orchestrator import Orchestrator
 from .validation import validate_address, validate_file_path, validate_solc_version, validate_url
@@ -78,6 +79,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         orchestrator = Orchestrator(config, diagnostics)
         results = orchestrator.run()
+
+        # Keep report artifacts as a first-class output of every successful audit.
+        # The current orchestrator has no detector findings yet, so an empty finding
+        # list is intentional and still provides stable report/summary/diagnostics files.
+        exporter = Exporter(config, diagnostics)
+        exporter.write_report([])
+        exporter.write_summary([])
+        exporter.write_diagnostics()
+
         print(json.dumps({"status": "ok", "results": results}, indent=2, sort_keys=True))
         return 0
     except (FileNotFoundError, PermissionError, ValueError, RuntimeError) as exc:
