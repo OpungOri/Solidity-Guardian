@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Sequence
 
 from .diagnostics import Diagnostics
@@ -22,14 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-d", "--dir")
     parser.add_argument("-o", "--output", default="./audit-output")
     parser.add_argument("--deep", action="store_true")
-    parser.add_argument("--generate-poc", action="store_true")
+    parser.add_argument("--generate-poc", action="store_true", help="Generate a non-destructive local reproduction scaffold")
     parser.add_argument("--solc-version")
     parser.add_argument("--rpc", help="RPC URL; required for --address source acquisition")
     parser.add_argument("--rpc-fork")
-    parser.add_argument("--address", help="Contract address to audit; source is fetched from explorer")
-    parser.add_argument("--chain-id", help="Explorer chain ID, e.g. 1, 137, 11155111")
-    parser.add_argument("--explorer-api", default="https://api.etherscan.io/api", help="Etherscan-compatible API endpoint")
-    parser.add_argument("--explorer-api-key", default=os.environ.get("WIZARD_EXPLORER_API_KEY"), help="Explorer API key")
+    parser.add_argument("--address")
+    parser.add_argument("--chain-id")
+    parser.add_argument("--explorer-api", default="https://api.etherscan.io/api")
+    parser.add_argument("--explorer-api-key", default=os.environ.get("WIZARD_EXPLORER_API_KEY"))
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--config")
     return parser
@@ -57,8 +58,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.address and not args.explorer_api_key:
             raise ValueError("--explorer-api-key or WIZARD_EXPLORER_API_KEY is required with --address")
         if args.address and not file_path and not directory_path:
-            fetched_dir = os.path.abspath(os.path.join(args.output, ".source"))
-            fetched = OnChainSourceFetcher(args.rpc, args.explorer_api, args.explorer_api_key).fetch(args.address, __import__("pathlib").Path(fetched_dir), args.chain_id)
+            fetched_dir = Path(args.output).resolve() / ".source"
+            fetched = OnChainSourceFetcher(args.rpc, args.explorer_api, args.explorer_api_key).fetch(args.address, fetched_dir, args.chain_id)
             directory_path = validate_file_path(fetched.directory)
             diagnostics.add("info", "source_fetch", "Fetched verified source", **fetched.provenance)
         elif args.address:
@@ -70,7 +71,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         exporter.write_report(orchestrator.findings)
         exporter.write_summary(orchestrator.findings)
         exporter.write_diagnostics()
-        print(json.dumps({"status": "ok", "results": results}, indent=2, sort_keys=True))
+        exporter.write_submission_bundle(orchestrator.findings, target={"address": args.address, "chain_id": args.chain_id, "source_status": "verified" if args.address else "local source"})
+        if args.generate_poc:
+            exporter.write_poc_scaffold(orchestrator.findings, address=args.address, chain_id=args.chain_id)
+            diagnostics.add("info", "poc", "Generated non-destructive local reproduction scaffold", executed=False, broadcast=False)
+            exporter.write_diagnostics()
+        print(json.dumps({"status": "ok", "results": results, "artifacts": {"submission": str(Path(args.output).resolve() / "submission.md"), "poc_executed": False}}, indent=2, sort_keys=True))
         return 0
     except (FileNotFoundError, PermissionError, ValueError, RuntimeError, SourceFetchError) as exc:
         diagnostics.add("error", "cli", str(exc), input_file=args.file, directory=args.dir, address=args.address)
