@@ -112,7 +112,7 @@ def detect_source_patterns(files: list[Path]) -> list[Finding]:
     checks: tuple[tuple[str, str, str, str, str, int], ...] = (
         (
             r"\btx\.origin\b",
-            "ACCESS-CONTROL-001",
+            "TX-ORIGIN-001",
             "access-control",
             "Authorization uses tx.origin",
             "Use msg.sender or an explicit trusted-forwarder model; tx.origin can be confused by intermediary contracts.",
@@ -188,7 +188,7 @@ def detect_source_patterns(files: list[Path]) -> list[Finding]:
             if ".call(" not in line or ".call{" in line:
                 continue
             nearby = "\n".join(lines[index : index + 3])
-            if not re.search(r"\bbool|require\s*\(|assert\s*\(", nearby):
+            if not re.search(r"\bbool\b|require\s*\(|assert\s*\(", nearby):
                 findings.append(
                     _finding(
                         "UNCHECKED-CALL-001",
