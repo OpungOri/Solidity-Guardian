@@ -1,0 +1,8 @@
+output: ./audit-output
+deep: false
+generate_poc: false
+format: json
+strict: true
+solc_version: 0.8.20
+workspace_root: .
+correlation_id: null
